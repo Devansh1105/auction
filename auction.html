@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reverse Auction House</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0e13; --panel:#10161f; --panel2:#0d1219; --line:#1e2937;
+    --text:#e6edf3; --muted:#64748b; --gold:#f5b942; --drop:#4ade80; --hot:#f87171;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;min-height:100vh}
+  .mono{font-family:'IBM Plex Mono',monospace}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 16px 60px}
+  header{display:flex;align-items:center;gap:14px;padding:18px 0;border-bottom:1px solid var(--line)}
+  .gavel{width:44px;height:44px;border-radius:10px;background:var(--gold);color:#1a1206;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+  h1{font-size:20px;font-weight:700;letter-spacing:.02em}
+  .sub{font-size:12px;color:var(--muted)}
+  .live{color:var(--drop);animation:blink 1.4s infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+  .grid{display:grid;grid-template-columns:1fr 1.15fr;gap:16px;margin-top:20px}
+  @media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .imgbox{height:200px;border-radius:10px;border:1.5px dashed #33415a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#4b5b73;cursor:pointer;overflow:hidden;font-size:13px}
+  .imgbox img{width:100%;height:100%;object-fit:cover}
+  .lotname{margin-top:14px;font-size:19px;font-weight:500;outline:none;border-bottom:1px dashed #33415a;padding-bottom:4px}
+  .lotname:empty:before{content:'Click to name this lot';color:#4b5b73}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .lbl{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+  .val{font-size:20px;font-weight:500;margin-top:2px}
+  .price{font-size:42px;font-weight:700;color:var(--drop);letter-spacing:-.02em;margin-top:14px;transition:transform .15s}
+  .price.pulse{transform:scale(1.05)}
+  .strike{font-size:14px;color:var(--muted);text-decoration:line-through}
+  .saved{font-size:13px;color:var(--drop)}
+  button.bid{width:100%;margin-top:14px;padding:14px;border:none;border-radius:10px;background:var(--drop);color:#06270f;font-family:'Space Grotesk';font-size:16px;font-weight:700;cursor:pointer;letter-spacing:.02em}
+  button.bid:active{transform:scale(.98)}
+  button.bid:disabled{background:#23314a;color:#4b5b73;cursor:not-allowed}
+  .gavelmsg{margin-top:12px;text-align:center;font-size:14px;color:var(--gold);min-height:20px}
+  .clock{font-size:30px;font-weight:700}
+  .clock.hot{color:var(--hot)}
+  .barwrap{height:5px;background:var(--panel2);border-radius:99px;margin-top:8px;overflow:hidden}
+  .bar{height:100%;background:var(--gold);border-radius:99px;transition:width .1s linear}
+  .feed{margin-top:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);overflow:hidden}
+  .row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px;animation:slide .25s ease}
+  .row:last-child{border-bottom:none}
+  @keyframes slide{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+  .av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#0a0e13;flex:none}
+  .who{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .amt{color:var(--drop);font-weight:500}
+  .cut{font-size:11px;color:var(--hot)}
+  .you{outline:1.5px solid var(--drop);outline-offset:-1.5px;border-radius:6px}
+  footer{margin-top:28px;text-align:center;font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     ⚙️  SETTINGS — EDIT THESE AND RE-UPLOAD TO CHANGE THE SITE
+     ============================================================ -->
+<script>
+const CONFIG = {
+  SITE_TITLE:      "REVERSE AUCTION HOUSE",       // big heading at the top
+  TAGLINE:         "lowest bid wins · price only goes down",
+  AUCTION_SECONDS: 20,         // ⏱ how long each lot runs (change me!)
+  START_PRICE:     100000,     // ₹ opening price of each lot
+  FLOOR_PRICE:     5000,       // price can never drop below this
+  LOT_NAME:        "",         // pre-fill an item name, or leave "" for placeholder
+  IMAGE_URL:       "",         // paste a public image link so all visitors see it
+  CURRENCY:        "₹",
+  BOT_NAMES: ["QUANTBOT-7","DEEPVALUE.AI","HFT-NINJA","LIQUIDATOR-X","ORACLE-9000","YOLO-ENGINE"]
+};
+</script>
+
+<div class="wrap">
+  <header>
+    <div class="gavel">⚒</div>
+    <div>
+      <h1 id="siteTitle"></h1>
+      <div class="sub" id="tagline"></div>
+    </div>
+    <div style="margin-left:auto;text-align:right">
+      <div class="lbl">Lot closes in</div>
+      <div class="clock mono" id="clock">20.0s</div>
+      <div class="barwrap"><div class="bar" id="bar" style="width:100%"></div></div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <label>
+        <input type="file" accept="image/*" id="imgIn" style="display:none">
+        <div class="imgbox" id="imgBox"><span style="font-size:30px">⊕</span>Add item image</div>
+      </label>
+      <div class="lotname" id="lotName" contenteditable="true" spellcheck="false"></div>
+      <div class="stats">
+        <div class="stat"><div class="lbl">Current low bid</div><div class="val mono" id="curBid" style="color:var(--drop)">—</div></div>
+        <div class="stat"><div class="lbl">Leading bidder</div><div class="val" id="leader" style="font-size:15px">—</div></div>
+        <div class="stat"><div class="lbl">Opened at</div><div class="val mono strike" id="openAt">—</div></div>
+        <div class="stat"><div class="lbl">Driven down by</div><div class="val mono saved" id="saved">0%</div></div>
+      </div>
+      <div class="price mono" id="bigPrice">—</div>
+      <button class="bid" id="bidBtn">UNDERCUT — BID <span class="mono" id="nextBid"></span></button>
+      <div class="gavelmsg" id="gavelMsg"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl" style="margin-bottom:4px">Live undercut feed</div>
+      <div class="sub"><span class="live">●</span> 6 machine bidders connected — each bid drives the price <b style="color:var(--hot)">down</b></div>
+      <div class="feed" id="feed"></div>
+    </div>
+  </div>
+
+  <footer>Reverse auction: every paddle raise undercuts the last bid. When the clock hits zero, the <b>lowest</b> bid takes the lot.</footer>
+</div>
+
+<script>
+const C = CONFIG;
+const cols = ["#7F77DD","#5DCAA5","#F0997B","#ED93B1","#85B7EB","#FAC775"];
+const fmt = n => C.CURRENCY + Math.round(n).toLocaleString("en-IN");
+const $ = id => document.getElementById(id);
+
+$("siteTitle").textContent = C.SITE_TITLE;
+$("tagline").textContent = C.TAGLINE;
+if (C.LOT_NAME) $("lotName").textContent = C.LOT_NAME;
+if (C.IMAGE_URL) setImg(C.IMAGE_URL);
+$("imgIn").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader(); r.onload = () => setImg(r.result); r.readAsDataURL(f);
+});
+function setImg(src){ $("imgBox").innerHTML = '<img src="'+src+'" alt="lot item">'; $("imgBox").style.border="1px solid var(--line)"; }
+
+let price, clk, leader = "—", youLead = false, sold = false, lot = 1, frenzy;
+
+function cut(){ return Math.max(200, Math.round(price * (0.02 + Math.random()*0.06) / 100) * 100); }
+
+function startLot(){
+  price = C.START_PRICE; clk = C.AUCTION_SECONDS; leader = "—"; youLead = false; sold = false;
+  $("feed").innerHTML = ""; $("gavelMsg").textContent = "— LOT #" + String(lot).padStart(3,"0") + " OPEN —";
+  $("openAt").textContent = fmt(C.START_PRICE);
+  render();
+}
+
+function placeBid(name, color, you){
+  if (sold) return;
+  const c = cut();
+  if (price - c < C.FLOOR_PRICE) { return; }
+  price -= c; leader = name; youLead = !!you;
+  clk = Math.min(C.AUCTION_SECONDS, Math.max(clk, 4 + Math.random()*4));
+  $("gavelMsg").textContent = "";
+  const row = document.createElement("div");
+  row.className = "row" + (you ? " you" : "");
+  row.innerHTML = '<span class="av" style="background:'+color+'">'+name.slice(0,2)+'</span>'
+    + '<span class="who">'+name+'</span>'
+    + '<span class="cut mono">▼ '+fmt(c)+'</span>'
+    + '<span class="amt mono">'+fmt(price)+'</span>';
+  $("feed").prepend(row);
+  while ($("feed").children.length > 9) $("feed").lastChild.remove();
+  const p = $("bigPrice"); p.classList.add("pulse"); setTimeout(()=>p.classList.remove("pulse"),160);
+  render();
+}
+
+function render(){
+  $("bigPrice").textContent = fmt(price);
+  $("curBid").textContent = leader === "—" ? "—" : fmt(price);
+  $("leader").textContent = leader; $("leader").style.color = youLead ? "var(--drop)" : "var(--text)";
+  $("saved").textContent = Math.round((1 - price / C.START_PRICE) * 100) + "%";
+  const can = !sold && price - cut() >= C.FLOOR_PRICE;
+  $("bidBtn").disabled = !can;
+  $("nextBid").textContent = can ? fmt(price - cut()) : "FLOOR";
+}
+
+$("bidBtn").onclick = () => placeBid("YOU", "#4ade80", true);
+
+(function botLoop(){
+  if (!sold && Math.random() < (clk < 6 ? 0.6 : 0.32)) {
+    const i = Math.floor(Math.random() * C.BOT_NAMES.length);
+    placeBid(C.BOT_NAMES[i], cols[i % cols.length]);
+  }
+  setTimeout(botLoop, 450 + Math.random()*1200);
+})();
+
+setInterval(() => {
+  if (sold) return;
+  clk -= 0.1;
+  const g = $("gavelMsg");
+  if (clk <= 0) {
+    sold = true; clk = 0;
+    g.innerHTML = "⚒ SOLD to <b>" + leader + "</b> at " + fmt(price) + (youLead ? " — you win!" : "");
+    setTimeout(() => { lot++; startLot(); }, 3500);
+  } else if (clk < 2) g.textContent = "GOING TWICE…";
+  else if (clk < 4) g.textContent = "GOING ONCE…";
+  $("clock").textContent = clk.toFixed(1) + "s";
+  $("clock").className = "clock mono" + (clk < 4 ? " hot" : "");
+  $("bar").style.width = (clk / C.AUCTION_SECONDS * 100) + "%";
+}, 100);
+
+startLot();
+</script>
+</body>
+</html>
